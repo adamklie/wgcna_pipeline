@@ -40,6 +40,7 @@ cat("Parsing arguments")
 rds_file <- opt$rds_file
 output_dir <- opt$output_dir
 power <- opt$power
+name <- opt$name
 seed <- opt$seed
 cat("\n")
 
@@ -86,13 +87,12 @@ cat("\n")
 
 # Set-up the object
 DefaultAssay(adata) <- "RNA"
-SetActiveWGCNA(adata) <- name
+adata <- SetActiveWGCNA(adata, wgcna_name=name)
 
 # construct co-expression network:
 cat("Constructing co-expression network\n")
 setwd(output_dir)
 print(paste0("Working directory to throw the TOM object: ", getwd()))
-stop("work in progress")
 adata <- ConstructNetwork(
   adata, 
   soft_power=power,
@@ -102,8 +102,12 @@ adata <- ConstructNetwork(
 )
 cat("\n")
 
-# Save the module sizes to a dataframe
-write.csv(t(data.frame(table(get(name, adata@misc)$wgcna_net$colors))), printf("%s_module_sizes.tsv", out_prefix), sep="\t")
-
-# Overwrite the WGCNA object with the soft power threshold included
+# Overwrite the WGCNA object after adding the network
+cat(sprintf("Saving object to %s.rds\n", out_prefix))
 saveRDS(adata, file=sprintf('%s.rds', out_prefix))
+cat(sprintf("Saved object to %s.rds\n", out_prefix))
+cat("\n")
+
+# Save the module sizes to a dataframe
+write.table(t(data.frame(table(get(name, adata@misc)$wgcna_net$colors))), printf("%s_module_sizes.tsv", out_prefix), sep="\t")
+cat("\n")

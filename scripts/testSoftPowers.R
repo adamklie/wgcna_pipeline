@@ -47,7 +47,7 @@ cat("Parsing arguments")
 rds_file <- opt$rds_file
 output_dir <- opt$output_dir
 group_by <- opt$group_by
-groups <- strsplit(opt$groups, ",")[[1]]
+groups <- opt$groups
 name <- opt$name
 seed <- opt$seed
 cat("\n")
@@ -60,10 +60,14 @@ if (is.null(name)) {
 out_prefix <- file.path(output_dir, name)
 cat(sprintf("Using name %s\n", name))
 cat(sprintf("Using output prefix %s\n", out_prefix))
+if (!is.null(groups)) {
+    groups <- strsplit(groups, ",")[[1]]
+}
+cat(sprintf("Using groups %s\n", groups))
 cat("\n")
 
 # Ensure all required arguments are provided
-if(is.null(rds_file) || is.null(output_dir) || is.null(group_by) || is.null(groups)) {
+if(is.null(rds_file) || is.null(output_dir)) {
     stop("Missing required arguments.")
 }
 
@@ -100,7 +104,7 @@ cat("\n")
 
 # Set-up the object
 DefaultAssay(adata) <- "RNA"
-SetActiveWGCNA(adata) <- name
+adata <- SetActiveWGCNA(adata, wgcna_name=name)
 
 # transpose the matrix, taking care of the
 cat("Setting the expression matrix for running testSoftPowers\n")
@@ -113,7 +117,6 @@ adata <- SetDatExpr(
     wgcna_name=name,
     slot="data"
 )
-head(get(name, adata@misc)$datExpr)[1:5, c("LINC01409", "LINC01128", "SAMD11")]
 cat(sprintf("Dimensions of the matrix are %s\n", dim(get(name, adata@misc)$datExpr)))
 cat("\n")
 
@@ -141,5 +144,8 @@ power <- power_table$Power[which(power_table$SFT.R.sq > 0.85)[1]]
 cat(sprintf("Automatic soft power %s\n", power))
 write.table(power_table, sprintf("%s_powerTable.tsv", out_prefix), sep="\t")
 
-# Overwrite the WGCNA object with the soft power threshold included
+# Write the WGCNA object with the soft power threshold included
+cat(sprintf("Saving object to %s.rds\n", out_prefix))
 saveRDS(adata, file=sprintf('%s.rds', out_prefix))
+cat(sprintf("Saved object to %s.rds\n", out_prefix))
+cat("\n")

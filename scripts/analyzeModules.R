@@ -108,7 +108,7 @@ cat("\n")
 
 # Set-up the object
 DefaultAssay(adata) <- "RNA"
-SetActiveWGCNA(adata) <- name
+adata <- SetActiveWGCNA(adata, wgcna_name=name)
 
 # Analyze these modules
 cat("Computing module eigengenes\n")
@@ -145,7 +145,8 @@ MEs <- GetMEs(adata, harmonized=FALSE)
 write.table(MEs, sprintf("%s_MEs.tsv", out_prefix), sep="\t")
 cat("\n")
 
-
-
 # Overwrite the WGCNA object with the soft power threshold included
+cat(sprintf("Saving object to %s.rds\n", out_prefix))
 saveRDS(adata, file=sprintf('%s.rds', out_prefix))
+cat(sprintf("Saved object to %s.rds\n", out_prefix))
+cat("\n")
