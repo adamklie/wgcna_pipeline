@@ -9,9 +9,10 @@
 # output_dir: Path to directory to output final object and intermediate files.
 
 # Optional arguments
-# harmonize_by: Comma-separated list of metadata fields to perform harmonization of module eigengenes with
+# harmonize_by: Comma-separated list of metadata fields to perform harmonization of module eigengenes with, no white space between commas!
 # group_by: column in seurat_obj@meta.data containing grouping info, ie clusters or celltypes
-# groups: Comma-separated list name of the group(s) in group_by to use for kME calculation
+# groups: Comma-separated list name of the group(s) in harmonize_by to use for kME calculation
+# name: Name to use for the WGCNA object. Default is the base filename of the rds_file.
 # seed: Random seed to use for reproducibility.
 
 # The script will:
@@ -22,19 +23,19 @@
 # 5. Write out the Seurat object that is ready for downstream analysis
 
 # Usage:
-# Rscript 4_analyzeModules.R -r <rds_file> -o <output_dir> -b <harmonize_by> -g <group_by> -a <name> -s <seed>
+# Rscript 4_analyzeModules.R -r <rds_file> -o <output_dir> -b <harmonize_by> -g <harmonize_by> -a <name> -s <seed>
 
 # Argument parsing
 suppressMessages(library(optparse))
 option_list <- list(
     make_option(c("-r", "--rds_file"), type="character", default=NULL, help="Path to RDS file containing processed Seurat object."),
     make_option(c("-o", "--output_dir"), type="character", default=NULL, help="Path to directory to output final object and intermediate files."),
-    make_option(c("-b", "--harmonize_by"), type="character", default=NULL, 
-        help="Comma-separated list of variables to use for grouping cells. Do not include white space between the commas."),
+    make_option(c("-q", "--harmonize_by"), type="character", default=NULL, 
+        help="Comma-separated list of variables to perform harmonization of module eigengenes with, no white space between commas!"),
     make_option(c("-b", "--group_by"), type="character", default=NULL, 
-        help="Comma-separated list of variables to use for grouping cells. Do not include white space between the commas."),
+        help="Column in meta.data containing grouping info, ie clusters or celltypes"),
     make_option(c("-g", "--groups"), type="character", default=NULL, 
-        help="Comma-separated list of groups conatined within the group_by parameter to find soft-thresholds for."),
+        help="Comma-separated list of groups conatined within the harmonize_by parameter to find soft-thresholds for."),
     make_option(c("-a", "--name"), type="character", default=NULL, help="Name to use for the WGCNA object. Default is the base filename of the rds_file."),
     make_option(c("-s", "--seed"), type="integer", default=12345, help="Random seed to use for reproducibility.")
 )
@@ -47,8 +48,10 @@ print(opt)
 cat("Parsing arguments")
 rds_file <- opt$rds_file
 output_dir <- opt$output_dir
+harmonize_by <- opt$harmonize_by
 group_by <- opt$group_by
 groups <- opt$groups
+name <- opt$name
 seed <- opt$seed
 cat("\n")
 
@@ -60,18 +63,24 @@ if (is.null(name)) {
 out_prefix <- file.path(output_dir, name)
 cat(sprintf("Using name %s\n", name))
 cat(sprintf("Using output prefix %s\n", out_prefix))
-if (!is.null(group_by)) {
-    group_by <- strsplit(group_by, ",")[[1]]
-    cat(sprintf("Using group_by %s\n", group_by))
+if (!is.null(harmonize_by)) {
+    harmonize_by <- strsplit(harmonize_by, ",")[[1]]
+    cat(sprintf("Harmonizing by %s\n", paste0(harmonize_by, collapse=", ")))
+} else {
+    cat("Not harmonizing\n")
 }
-else {
-    cat("Not using group_by so will not compute harmonized module eigengenes\n")
-}
-if(is.null(groups)) {
-    cat("Not using groups during kME calculation\n")
-}
-else {
-    cat(sprintf("Using groups for kME calculation %s\n", groups))
+if(is.null(group_by)) {
+    cat("Using all cells during kME calculation\n")
+    if(!is.null(groups)) {
+        stop("Cannot include groups argument if not using group_by for kME calculation")
+    }
+} else {
+    cat(sprintf("Using only selected cells for kME calculation using %s column\n", group_by))
+    if (is.null(groups)) {
+        stop("Must provide groups if using group_by for kME calculation")
+    }
+    groups <- strsplit(groups, ",")[[1]]
+    cat(sprintf("Using groups %s\n", paste0(groups, collapse=", ")))
 }
 cat("\n")
 
@@ -110,12 +119,20 @@ cat("\n")
 DefaultAssay(adata) <- "RNA"
 adata <- SetActiveWGCNA(adata, wgcna_name=name)
 
+# Scaling data
+cat("Scaling data\n")
+if (is.null(VariableFeatures(adata))) {
+    adata <- FindVariableFeatures(adata, selection.method = "vst", nfeatures = 2000)
+}
+adata <- ScaleData(adata, features=VariableFeatures(adata))
+cat("\n")
+
 # Analyze these modules
 cat("Computing module eigengenes\n")
 adata <- ModuleEigengenes(
     adata, 
-    group.by.vars=group_by,
-    verbose=FALSE,
+    group.by.vars=harmonize_by,
+    verbose=TRUE,
     assay="RNA",
     wgcna_name=name
 )
@@ -125,19 +142,22 @@ if (!is.null(harmonize_by)) {
     cat("Computing harmonized kMEs\n")
     adata <- ModuleConnectivity(
         adata,
+        group.by = group_by,
+        group_name = groups,
         assay="RNA",
         slot="data",
         harmonized=TRUE,
         wgcna_name=name
     )
-}
-else {
+} else {
     cat("Computing kMEs")
     adata <- ModuleConnectivity(
         adata,
+        group.by = group_by,
+        group_name = groups,
         assay="RNA",
         slot="data",
-        harmonized=FALSE
+        harmonized=FALSE,
         wgcna_name=name
     )
 }
@@ -145,7 +165,7 @@ MEs <- GetMEs(adata, harmonized=FALSE)
 write.table(MEs, sprintf("%s_MEs.tsv", out_prefix), sep="\t")
 cat("\n")
 
-# Overwrite the WGCNA object with the soft power threshold included
+# Overwrite the WGCNA object with the module fun included
 cat(sprintf("Saving object to %s.rds\n", out_prefix))
 saveRDS(adata, file=sprintf('%s.rds', out_prefix))
 cat(sprintf("Saved object to %s.rds\n", out_prefix))

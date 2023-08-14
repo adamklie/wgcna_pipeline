@@ -76,10 +76,15 @@ if(!is.null(group_by) && is.null(groups)) {
     stop("If group_by is set, groups must be set.")
 }
 
-# # Make the out_dirname if it doesn't exist using an R command
-cat(sprintf("Creating output directory %s\n", output_dir))
-dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-cat("\n")
+# Check if output directory exists, if it does already exist, throw an error
+if (dir.exists(output_dir)) {
+    stop(sprintf("Output directory %s already exists. Exiting", output_dir))
+    cat("\n")
+} else {
+    cat(sprintf("Creating output directory %s\n", output_dir))
+    dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+    cat("\n")
+}
 
 # Imports
 cat("Loading libraries\n")
@@ -117,7 +122,9 @@ adata <- SetDatExpr(
     wgcna_name=name,
     slot="data"
 )
-cat(sprintf("Dimensions of the matrix are %s\n", dim(get(name, adata@misc)$datExpr)))
+dims <- dim(get(name, adata@misc)$datExpr)
+
+cat(sprintf("Dimensions of the matrix are %s\n", paste0(dims, collapse="x")))
 cat("\n")
 
 # Test different soft powers:
@@ -136,13 +143,13 @@ png(sprintf("%s_softThreshold.png", out_prefix), widt=600, height=600)
 plot_list <- PlotSoftPowers(adata)
 wrap_plots(plot_list, ncol=2)
 dev.off()
-cat("\n")
 
 # Save the soft power threshold results
 power_table <- GetPowerTable(adata)
 power <- power_table$Power[which(power_table$SFT.R.sq > 0.85)[1]]
 cat(sprintf("Automatic soft power %s\n", power))
 write.table(power_table, sprintf("%s_powerTable.tsv", out_prefix), sep="\t")
+cat("\n")
 
 # Write the WGCNA object with the soft power threshold included
 cat(sprintf("Saving object to %s.rds\n", out_prefix))

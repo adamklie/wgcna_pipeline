@@ -78,10 +78,14 @@ if(is.null(rds_file) || is.null(output_dir) || is.null(group_by)) {
     stop("Missing required arguments.")
 }
 
-# # Make the out_dirname if it doesn't exist using an R command
-cat(sprintf("Creating output directory %s\n", output_dir))
-dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
-cat("\n")
+# Check if output directory exists, if it does already exist, throw an error
+if (dir.exists(output_dir)) {
+    stop(sprintf("Output directory %s already exists. Exiting", output_dir))
+} else {
+    cat(sprintf("Creating output directory %s\n", output_dir))
+    dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+    cat("\n")
+}
 
 # Imports
 cat("Loading libraries\n")
